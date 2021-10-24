@@ -222,19 +222,24 @@ void setup_comm()
   }
 }
 
-void set_variable(char* var, char* varv, int argc, char* argv[])
+void set_variable(char* var, char* varv)
 {
-  enum variableEnum {ssid, pass}
-  variableEnum var_index;
+  enum variableEnum {null, ssid, pass};
+  variableEnum var_index=null;
   if (!strcmp(var, "ssid")) var_index=ssid;
   else if (!strcmp(var, "pass")) var_index=pass;
   switch (var_index)
   {
+    case null:
+      break;
     case ssid:
+      Serial.print("SSID parameter value change to ");
+      Serial.println(varv);
       break;
     case pass:
+      Serial.print("PASS parameter value change to ");
+      Serial.println(varv);
       break;
-
   }
 }
 
@@ -258,20 +263,22 @@ void loop_comm() {
           char command[3];
           char variable[16];
           char variable_value[64];
+          char *pibuffer = input_buffer;
           for (int i=0; i<client_available; i++)
           {
-            input_data = (char) espClient.read(
-            char *pibuffer = input_buffer;
-            )
+            input_data = (char) espClient.read();
+            // *(pibuffer++) = input_data;
             if (input_data==';' or input_data=='\r' or input_data=='\n')
               {
+                Serial.print("Received command: ");
+                Serial.println(input_buffer);
                 *pibuffer=0;
                 if (input_buffer[0]=='X')
-                {
-                  sscanf(input_buffer, "X %s %s %s", command, variable, variable_value);
-                }
-                if !strcmp(command, "do") set_variable(variable, variable_value);
-                pibuffer=input_data
+                  {
+                    sscanf(input_buffer, "X %s %s %s", command, variable, variable_value);
+                  }
+                  if (!strcmp(command, "do")) set_variable(variable, variable_value);
+                pibuffer=input_buffer;
               }
             else {*(pibuffer++)=input_data;}
           }
