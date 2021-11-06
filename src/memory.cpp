@@ -1,12 +1,9 @@
+#include <Arduino.h>
 #include <EEPROM.h>
-
-#define EEPROM_WIFI_SSID_DIR 0
-#define EEPROM_WIFI_SSID_LEN 32
-#define EEPROM_WIFI_PASS_DIR EEPROM_WIFI_SSID_DIR+EEPROM_WIFI_SSID_LEN
-#define EEPROM_WIFI_PASS_LEN 32
+#include "memory.h"
 
 void eeprom_init(int n_var) {
-    EEPROM.begin(sizeof(uint16_t)*n_var);
+    EEPROM.begin(sizeof(uint8_t)*n_var);
 }
 
 uint16_t read_memory(int dir)
@@ -23,16 +20,17 @@ uint8_t read_memory_byte(int dir)
   return EEPROM.read(dir);
 }
 
-char* read_memory_string(int dir, int len)
+void read_memory_string(char* res, int dir, int len)
 {
-  char res[len];
   char *pres=res;
   int cdir=dir;
+  // Serial.print("Reading memory: ");
   for (int i=0; i<len; i++)
   {
     *(pres++) = (char) read_memory_byte(cdir++);
+    // Serial.print(read_memory_byte(cdir-1));
   }
-  return res;
+  // Serial.println("");
 }
 
 void update_memory(int dir, uint16_t value)
@@ -48,26 +46,46 @@ void update_memory(int dir, uint16_t value)
 void update_memory_byte(int dir, uint8_t value)
 {
   if (read_memory_byte(dir) != value) {
-    uint8_t value_tmp = value;
-    EEPROM.write(dir, value_tmp);
+    // Serial.print(value);
+    EEPROM.write(dir, value);
     EEPROM.commit();
   }
 }
 
 void update_memory_string(int dir, char* data, int len)
 {
-  char *pdata=data;
   int cdir=dir;
+  // Serial.print("Update memory: ");
   for (int i=0; i<len; i++)
   {
     update_memory_byte(cdir++, (uint8_t) *(data++));
   }
+  // Serial.println("");
 }
 
-char* read_eeprom_ssid(void) {
-  return read_memory_string(EEPROM_WIFI_SSID_DIR, EEPROM_WIFI_SSID_LEN);
+void read_eeprom_ssid(char* res) {
+  read_memory_string(res, EEPROM_WIFI_SSID_DIR, EEPROM_WIFI_SSID_LEN);
+  if (res[0]==0 || res[0]==255) strcpy(res, "SSID");
 }
 
 void update_eeprom_ssid(char* data) {
+  update_memory_string(EEPROM_WIFI_SSID_DIR, data, EEPROM_WIFI_SSID_LEN);
+}
+
+void read_eeprom_pass(char* res) {
+  read_memory_string(res, EEPROM_WIFI_PASS_DIR, EEPROM_WIFI_PASS_LEN);
+  if (res[0]==0 || res[0]==255) strcpy(res, "PASS");
+}
+
+void update_eeprom_pass(char* data) {
   update_memory_string(EEPROM_WIFI_PASS_DIR, data, EEPROM_WIFI_PASS_LEN);
+}
+
+void read_eeprom_main_topic(char* res) {
+  read_memory_string(res, EEPROM_MAIN_TOPIC_DIR, EEPROM_MAIN_TOPIC_LEN);
+  if (res[0]==0 || res[0]==255) strcpy(res, "PASS");
+}
+
+void update_eeprom_main_topic(char* data) {
+  update_memory_string(EEPROM_MAIN_TOPIC_DIR, data, EEPROM_MAIN_TOPIC_LEN);
 }

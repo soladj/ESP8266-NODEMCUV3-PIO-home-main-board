@@ -13,6 +13,8 @@
 
 WiFiClient espClient;
 PubSubClient mqtt_client(espClient);
+char wifi_ssid[EEPROM_WIFI_SSID_LEN];
+char wifi_pass[EEPROM_WIFI_PASS_LEN];
 
 // Define NTP Client to get time
 WiFiUDP ntpUDP;
@@ -37,10 +39,16 @@ WiFiServer server(8080);
 bool ESP_SERVER = false;
 bool alreadyConnected = 0;
 
+unsigned hello_time;
+
 void setup_WIFI(){
   Serial.begin(115200);
 
-  WiFi.begin(SSID, PASSWORD);
+  Serial.print("Trying to connect to ssid: ");
+  Serial.println(wifi_ssid);
+  Serial.print("Pass: ");
+  Serial.println(wifi_pass);
+  WiFi.begin(wifi_ssid, wifi_pass);
 
   Serial.print("Conectando");
   do
@@ -48,6 +56,7 @@ void setup_WIFI(){
     delay(500);
     Serial.print(".");
     wifi_status = WiFi.status();
+    Serial.print(wifi_status);
   } while (array_find(wifi_status_list, wifi_status_len, wifi_status) == -1);
   Serial.println();
 
@@ -102,6 +111,43 @@ void pub_topics_refresh() {
   }
 }
 
+void main_topic_generator()
+{
+  Serial.print("CODE: ");
+  char str_var[CODE_LENGTH + 1];
+  main_topic = get_code(str_var, timeClient.getEpochTime(), CODE_LENGTH);
+  Serial.println(str_var);
+}
+
+void pub_topics_hello() {
+    hello_time = timeClient.getEpochTime();
+    mqtt_client.publish(MQTT_HELLO_TOPIC, hello_time);
+    Serial.println("Send hello topic");
+  }
+}
+
+void pub_topics_hello_response() {
+    own_topic = false;
+    mqtt_client.publish(MQTT_HELLO_RESPONSE_TOPIC, hello_time);
+    Serial.println("Send hello topic response");
+  }
+}
+
+void engine_hello_response(unsigned ht) {
+    if (ht != hello_time)
+    {
+      Serial.print("CONGRATULATIONS. YOUR NEW MAIN TOPIC IS ");
+      Serial.println(main_topic);
+    }
+    else if (own_topic==false) own_topic=true;
+    else
+    {
+      Serial.println("MAIN TOPIC REPEATED. CREATE ANOTHER ONE.");
+      main_topic_generator();
+    }
+  }
+}
+
 void set_alarm_var() {
   for(uint8_t i=0;i<MQTT_ALARM_VAR_NUMBER;i++) {
     *mqtt_alarm_var[i] = (uint16_t) mqtt_alarm_val[i];
@@ -113,6 +159,7 @@ void set_alarm_var() {
     Serial.println();
   }
 }
+
 void callback(char* topic, unsigned char* payload, unsigned int length) {
   char data[length+1];
   // sprintf(data, "%s", payload);
@@ -126,8 +173,14 @@ void callback(char* topic, unsigned char* payload, unsigned int length) {
   data[length] = 0;
   Serial.println();
 
-  if (strcmp(topic, "asshome/refresh")==0){
+  if (strcmp(topic, MQTT_REFRESH_TOPIC)==0){
     pub_topics_refresh();
+  }
+  else if (strcmp(topic, MQTT_HELLO_TOPIC)==0){
+    pub_topics_hello_response();
+  }
+  else if (strcmp(topic, MQTT_HELLO_RESPONSE_TOPIC)==0){
+    engine_hello_response();
   }
   else{
     for(uint8_t i=0; i<MQTT_SUB_TOPIC_NUMBER;i++) {
@@ -188,9 +241,13 @@ void mqtt_reconnect() {
   }
 }
 
-
 void setup_comm()
 {
+  eeprom_init(EEPROM_WIFI_PASS_LEN + EEPROM_WIFI_SSID_LEN);
+  read_eeprom_ssid(wifi_ssid);
+  read_eeprom_pass(wifi_pass);
+  delay(1000);
+
   setup_WIFI();
 
   if (ESP_SERVER){}
@@ -213,10 +270,6 @@ void setup_comm()
     mqtt_client.setCallback(callback);
     mqtt_reconnect();
 
-    // eeprom_init(MQTT_SUB_TOPIC_STORED);
-    // tsel = read_eeprom_temperature_sel();
-
-    // loop_tmpsensor(&tmp, &tsel, &cstatus, DEVICE_ZONE);
     pub_topics_refresh();
     connection_status = prev_connection_status = true;
   }
@@ -235,10 +288,12 @@ void set_variable(char* var, char* varv)
     case ssid:
       Serial.print("SSID parameter value change to ");
       Serial.println(varv);
+      update_eeprom_ssid(varv);
       break;
     case pass:
       Serial.print("PASS parameter value change to ");
       Serial.println(varv);
+      update_eeprom_pass(varv);
       break;
   }
 }
@@ -277,7 +332,7 @@ void loop_comm() {
                   {
                     sscanf(input_buffer, "X %s %s %s", command, variable, variable_value);
                   }
-                  if (!strcmp(command, "do")) set_variable(variable, variable_value);
+                  if (!strcmp(command, "cf")) set_variable(variable, variable_value);
                 pibuffer=input_buffer;
               }
             else {*(pibuffer++)=input_data;}
